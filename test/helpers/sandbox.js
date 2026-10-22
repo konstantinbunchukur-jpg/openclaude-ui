@@ -14,12 +14,19 @@ async function sandbox(t) {
   let child;
   t.after(async () => {
     if (child && child.exitCode === null && child.signalCode === null) {
-      const closed = once(child, 'close');
+      // The guarantee is that the child closes. taskkill's exit code is not a reliable
+      // signal: it returns non-zero when the process exited between the check and the
+      // call (seen on GitHub Actions runners), so wait for 'close' and bound that wait.
+      const closed = child.exitCode !== null || child.signalCode !== null
+        ? Promise.resolve()
+        : once(child, 'close');
       if (process.platform === 'win32') {
-        const result = spawnSync('taskkill', ['/pid', String(child.pid), '/T', '/F'], { windowsHide: true });
-        assert.equal(result.status, 0, 'test server process tree must stop');
+        spawnSync('taskkill', ['/pid', String(child.pid), '/T', '/F'], { windowsHide: true });
       } else child.kill('SIGTERM');
-      await closed;
+      await Promise.race([
+        closed,
+        delay(5000).then(() => { throw new Error('test server process tree must stop'); })
+      ]);
     }
     fs.rmSync(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
   });
