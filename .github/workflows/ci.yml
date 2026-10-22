@@ -1,0 +1,31 @@
+name: Smoke checks
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  smoke:
+    runs-on: windows-latest
+    timeout-minutes: 5
+    strategy:
+      matrix:
+        node: [22, 24]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      # No npm install: the UI and its tests use Node built-ins only.
+      - run: npm run check
+      - run: npm test
+  security:
+    runs-on: windows-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      # Expected to fail until the defects in docs/REVIEW.md are fixed.
+      - run: npm run test:security

@@ -1,0 +1,36 @@
+name: Сообщение об ошибке
+description: Что-то работает не так
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Не прикладывайте `config.json`, ключи API, историю чатов и скриншоты с
+        реальными путями. Уязвимости сообщайте приватно — см. SECURITY.md.
+  - type: input
+    id: version
+    attributes:
+      label: Версия
+      description: Вывод `git log -1 --oneline` и `node -v`
+      placeholder: "0.1.0, Node.js v24.21.0"
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Шаги воспроизведения
+      description: Что вы открыли, нажали и в какой папке работали (замените путь на синтетический)
+    validations:
+      required: true
+  - type: textarea
+    id: behaviour
+    attributes:
+      label: Ожидаемое и фактическое поведение
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Вывод консоли
+      description: Удалите ключи, пути и персональные данные.
+      render: shell

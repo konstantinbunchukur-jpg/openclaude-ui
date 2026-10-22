@@ -1,0 +1,32 @@
+{
+  "name": "openclaude-ui",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Local, dependency-free browser UI for the OpenClaude CLI",
+  "keywords": [
+    "openclaude",
+    "claude",
+    "cli",
+    "web-ui",
+    "local",
+    "ollama",
+    "ai-agent"
+  ],
+  "license": "MIT",
+  "author": "Konstantin <konstantinbunchukur@gmail.com>",
+  "homepage": "https://github.com/konstantinbunchukur-jpg/openclaude-ui#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/konstantinbunchukur-jpg/openclaude-ui.git"
+  },
+  "bugs": {
+    "url": "https://github.com/konstantinbunchukur-jpg/openclaude-ui/issues"
+  },
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "start": "node server.js",
+    "check": "node --check server.js && node --check public/app.js && node --check test/mock-openclaude.js && node --check test/helpers/sandbox.js && node --check test/smoke.test.js && node --check test/known-risks.js && node --check test/sandbox.test.js && node --check public/i18n.js && node --check test/i18n.test.js",
+    "test": "node --test test/smoke.test.js test/sandbox.test.js test/i18n.test.js",
+    "test:security": "node --test test/known-risks.js"
+  }
+}

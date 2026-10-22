@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OpenClaude UI</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%23d97757'/%3E%3Ctext x='16' y='22' font-size='16' text-anchor='middle' fill='white' font-family='sans-serif'%3EO%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<div id="app">
+
+  <!-- ===================== Боковая панель настроек ===================== -->
+  <aside id="sidebar">
+    <div class="side-head">
+      <span class="logo-dot"></span>
+      <strong>OpenClaude UI</strong>
+      <button id="side-close" class="icon-btn" title="Закрыть">✕</button>
+    </div>
+
+    <div class="side-scroll">
+      <!-- CLI -->
+      <section class="card">
+        <h3>Программа openclaude</h3>
+        <label class="field">
+          <span>Команда или путь</span>
+          <input id="set-cmd" type="text" placeholder="openclaude">
+        </label>
+        <div id="cli-status" class="mini muted">Проверяю…</div>
+        <button id="btn-recheck" class="btn ghost small">Проверить ещё раз</button>
+      </section>
+
+      <!-- Рабочая папка -->
+      <section class="card">
+        <h3>Рабочая папка</h3>
+        <p class="hint">Папка проекта, с которой будет работать агент. Он сможет читать и менять файлы в ней.</p>
+        <label class="field">
+          <span>Путь к папке</span>
+          <input id="set-workspace" type="text" list="ws-list" placeholder="C:\Users\Вы\МойПроект">
+          <datalist id="ws-list"></datalist>
+        </label>
+        <div class="row">
+          <button id="btn-mkdir" class="btn ghost small">Создать папку</button>
+          <button id="btn-open-folder" class="btn ghost small">Проводник</button>
+          <button id="btn-open-term" class="btn ghost small" title="Открыть окно терминала в этой папке">Терминал</button>
+        </div>
+        <details class="advanced">
+          <summary>Дополнительные папки доступа</summary>
+          <p class="hint">Папки вне рабочей, к которым агенту можно давать доступ (одна в строке).</p>
+          <textarea id="set-adddirs" rows="2" placeholder="C:\другой\проект"></textarea>
+        </details>
+      </section>
+
+      <!-- Провайдер -->
+      <section class="card">
+        <h3>Провайдер и ключ API</h3>
+        <label class="field">
+          <span>Готовый набор</span>
+          <select id="set-provider">
+            <option value="">— вручную —</option>
+            <option value="openai">OpenAI</option>
+            <option value="ollama">Ollama (локально, бесплатно)</option>
+            <option value="gemini">Google Gemini</option>
+            <option value="custom">Другой OpenAI-совместимый API</option>
+          </select>
+        </label>
+        <div id="provider-hint" class="hint"></div>
+        <div id="env-editor"></div>
+        <button id="btn-add-env" class="btn ghost small">+ переменная</button>
+        <div class="row" style="margin-top:8px">
+          <button id="btn-test" class="btn ghost small" title="Отправит короткий тестовый запрос через текущие настройки">Проверить соединение</button>
+          <button id="btn-ollama" class="btn ghost small" title="Проверить, запущен ли локальный Ollama, и взять модель из списка">🔎 Найти Ollama</button>
+        </div>
+        <div id="test-result" class="mini hidden"></div>
+        <div id="ollama-status" class="mini hidden"></div>
+        <details class="advanced">
+          <summary>Дополнительно</summary>
+          <label class="field">
+            <span>Флаг --provider (пусто = авто)</span>
+            <input id="set-provider-flag" type="text" placeholder="openai / gemini / ollama …">
+          </label>
+          <label class="field">
+            <span>MCP-конфиги (пути к JSON, по одному в строке)</span>
+            <textarea id="set-mcp" rows="2" placeholder="C:\путь\к\mcp.json"></textarea>
+          </label>
+        </details>
+      </section>
+
+      <!-- Модель -->
+      <section class="card">
+        <h3>Модель</h3>
+        <label class="field">
+          <span>Модель (пусто = модель провайдера по умолчанию)</span>
+          <input id="set-model" type="text" list="model-list" placeholder="gpt-4o / sonnet / qwen2.5-coder:7b …">
+          <datalist id="model-list">
+            <option value="gpt-4o">
+            <option value="gpt-4.1">
+            <option value="gpt-4.1-mini">
+            <option value="sonnet">
+            <option value="opus">
+            <option value="qwen2.5-coder:7b">
+            <option value="llama3.1:8b">
+          </datalist>
+        </label>
+        <label class="field">
+          <span>Резервная модель — используется, если основная перегружена</span>
+          <input id="set-fallback" type="text" placeholder="не обязательно">
+        </label>
+        <label class="field">
+          <span>Усердие — насколько глубоко агент продумывает задачу</span>
+          <select id="set-effort">
+            <option value="">— по умолчанию —</option>
+            <option value="low">низкое (быстро и дёшево)</option>
+            <option value="medium">среднее</option>
+            <option value="high">высокое</option>
+            <option value="xhigh">очень высокое</option>
+            <option value="max">максимальное</option>
+            <option value="ultracode">ultracode</option>
+          </select>
+        </label>
+      </section>
+
+      <!-- Инструкции -->
+      <section class="card">
+        <h3>Инструкции агенту</h3>
+        <p class="hint">Добавляются к системному промпту для каждой задачи. Например: «отвечай по-русски», «перед правками показывай план».</p>
+        <textarea id="set-sysprompt" rows="3" placeholder="Не обязательно"></textarea>
+      </section>
+
+      <!-- Права -->
+      <section class="card">
+        <h3>Права агента</h3>
+        <label class="radio"><input type="radio" name="perm" value="plan"><span><b>Только план</b> — агент изучает проект и описывает, что сделал бы, но ничего не меняет (лучший выбор для первых задач)</span></label>
+        <label class="radio"><input type="radio" name="perm" value="default"><span><b>Спрашивать</b> — только чтение и простые правки без подтверждения (в окне чата подтверждения недоступны, опасные шаги агент пропустит)</span></label>
+        <label class="radio"><input type="radio" name="perm" value="dontAsk"><span><b>Только разрешённое</b> — агент выполняет только инструменты из списка «Разрешить» ниже, всё остальное запрещено без вопросов</span></label>
+        <label class="radio"><input type="radio" name="perm" value="acceptEdits"><span><b>Принимать правки</b> — агент может менять файлы и запускать разрешённые команды (рекомендуется)</span></label>
+        <label class="radio"><input type="radio" name="perm" value="bypassPermissions"><span><b>Без ограничений (опасно)</b> — агент сможет выполнять любые команды без вопросов</span></label>
+        <details class="advanced">
+          <summary>Разрешённые и запрещённые инструменты</summary>
+          <p class="hint">Готовые наборы — клик заполняет поле «Разрешить». Формат: имя инструмента или Bash(команда:*).</p>
+          <div class="row">
+            <button class="btn ghost tiny tools-preset" data-tools="Read,Glob,Grep">Только чтение</button>
+            <button class="btn ghost tiny tools-preset" data-tools="Read,Edit,Write,Glob,Grep,Bash(git:*)">Правки и git</button>
+            <button class="btn ghost tiny tools-preset" data-tools="Read,Edit,Write,Glob,Grep,Bash(git:*),Bash(npm test:*),Bash(npm run:*)">Правки, git и npm</button>
+          </div>
+          <label class="field">
+            <span>Разрешить (--allowedTools)</span>
+            <input id="set-allowed" type="text" placeholder="Bash(git:*),Read,Edit,Glob,Grep">
+          </label>
+          <label class="field">
+            <span>Запретить (--disallowedTools)</span>
+            <input id="set-disallowed" type="text" placeholder="напр. WebSearch">
+          </label>
+        </details>
+      </section>
+
+      <!-- Лимиты -->
+      <section class="card">
+        <h3>Лимиты на один запрос</h3>
+        <label class="field">
+          <span>Максимум шагов агента (0 — без лимита)</span>
+          <input id="set-maxturns" type="number" min="0" value="0">
+        </label>
+        <label class="field">
+          <span>Максимальный расход, USD (0 — без лимита)</span>
+          <input id="set-budget" type="number" min="0" step="0.5" value="0">
+        </label>
+      </section>
+    </div>
+
+    <div class="side-foot">
+      <button id="btn-save" class="btn primary">Сохранить настройки</button>
+      <div id="save-status" class="mini muted"></div>
+    </div>
+  </aside>
+
+  <!-- ===================== Основная область ===================== -->
+  <main id="main">
+    <header id="topbar">
+      <button id="side-open" class="icon-btn" title="Настройки">☰</button>
+      <div id="ws-chip" class="chip" title="Рабочая папка — нажмите, чтобы изменить">📁 <span id="ws-label">папка не выбрана</span></div>
+      <div class="spacer"></div>
+      <div id="chip-cli" class="chip ok" title="Версия openclaude">…</div>
+      <div id="chip-session" class="chip hidden" title="Текущая сессия — нажмите, чтобы начать новую">🔄 сессия</div>
+      <button id="btn-continue" class="btn ghost small" title="Продолжить самый свежий чат в этой папке">▶ Продолжить</button>
+      <button id="btn-history" class="btn ghost small" title="Список прошлых чатов">🕘 История</button>
+      <button id="btn-files" class="btn ghost small" title="Файлы рабочей папки">📂 Файлы</button>
+      <button id="btn-help" class="btn ghost small" title="Справка">❓</button>
+      <button id="btn-lang" class="btn ghost small" title="Язык интерфейса / Interface language">EN</button>
+      <button id="btn-newchat" class="btn ghost small">＋ Новый чат</button>
+    </header>
+
+    <div id="warning-banner" class="banner hidden"></div>
+
+    <div id="chat">
+      <div id="empty-state">
+        <div class="empty-logo"></div>
+        <h2>Чат с агентом openclaude</h2>
+        <p>Выберите рабочую папку, настройте провайдера и просто напишите задачу — агент сам будет читать файлы, редактировать код и запускать команды.</p>
+        <div class="tips">
+          <button class="tip">«Расскажи, что делает этот проект»</button>
+          <button class="tip">«Найди и исправь ошибки в коде»</button>
+          <button class="tip">«Добавь README с инструкцией по запуску»</button>
+          <button class="tip">«Напиши тесты для самого важного файла»</button>
+          <button class="tip">«Объясни этот код простыми словами»</button>
+          <button class="tip">«Запусти тесты проекта и покажи результат»</button>
+        </div>
+        <p class="hint" style="margin-top:24px">Первый раз здесь? Нажмите <b>❓</b> сверху — там короткая инструкция.</p>
+      </div>
+      <div id="messages"></div>
+    </div>
+
+    <details id="console-panel">
+      <summary>Журнал (технические сообщения CLI)</summary>
+      <pre id="console-log"></pre>
+    </details>
+
+    <footer id="composer">
+      <textarea id="input" rows="1" placeholder="Опишите задачу… (Enter — отправить, Shift+Enter — новая строка)"></textarea>
+      <button id="btn-stop" class="btn danger hidden">■ Стоп</button>
+      <button id="btn-send" class="btn primary">➤</button>
+    </footer>
+
+    <div id="statusbar">
+      <span id="st-node">node: …</span>
+      <span id="st-cli">openclaude: …</span>
+      <span id="st-session" class="muted"></span>
+      <span class="spacer"></span>
+      <span id="st-cost" class="muted"></span>
+    </div>
+  </main>
+</div>
+
+<!-- ===================== Онбординг (первый запуск) ===================== -->
+<div id="onboarding" class="modal-overlay hidden">
+  <div class="modal">
+    <h2>Добро пожаловать в OpenClaude UI 👋</h2>
+    <p id="ob-message">Это простой интерфейс для консольного агента openclaude. Четыре шага до первой задачи:</p>
+    <ol id="ob-steps">
+      <li id="ob-step-cli"><b>Установить openclaude</b> — <span class="muted" id="ob-cli-state">проверяю…</span>
+        <div class="row">
+          <code class="grow">npm install -g @twigpine/openclaude@latest</code>
+          <button id="ob-install" class="btn primary small">Установить сейчас</button>
+        </div>
+        <pre id="ob-log" class="hidden"></pre>
+      </li>
+      <li><b>Подключить модель</b> — ключ API провайдера (OpenAI, Gemini) или бесплатная локальная Ollama. Всё задаётся в настройках (кнопка ☰ слева сверху).</li>
+      <li><b>Выбрать рабочую папку</b> и нажать «Проверить соединение» в тех же настройках, затем «Сохранить настройки».</li>
+      <li><b>Начать безопасно</b> — агент меняет файлы по-настоящему, поэтому сначала сделайте копию проекта или коммит в Git. Для первых задач включите режим «Только план»: агент только расскажет, что сделал бы.</li>
+    </ol>
+    <div class="row end">
+      <button id="ob-recheck" class="btn ghost small">Проверить снова</button>
+      <button id="ob-plan" class="btn ghost small">Включить «Только план»</button>
+      <button id="ob-settings" class="btn ghost small">Открыть настройки</button>
+      <button id="ob-close" class="btn primary small">Продолжить</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== История чатов ===================== -->
+<div id="history-modal" class="modal-overlay hidden">
+  <div class="modal">
+    <h2>🕘 Прошлые чаты</h2>
+    <p class="hint">Это диалоги, сохранённые самим openclaude. Нажмите «Продолжить», чтобы писать в выбранный чат дальше.</p>
+    <label class="row" style="margin-bottom:10px; font-size:13px">
+      <input type="checkbox" id="hist-fork" style="width:auto"> создать копию (ответвление) — старый чат останется нетронутым
+    </label>
+    <div id="hist-list" class="hist-list">Загружаю…</div>
+    <div class="row end" style="margin-top:12px">
+      <button id="hist-close" class="btn ghost small">Закрыть</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== Вход в аккаунт ===================== -->
+<div id="login-modal" class="modal-overlay hidden">
+  <div class="modal">
+    <h2>🔐 Вход в аккаунт Claude</h2>
+    <p class="hint">Нажмите ссылку ниже и подтвердите вход в браузере. Это разовая настройка — потом окно можно закрыть.</p>
+    <pre id="login-log">Запускаю вход…</pre>
+    <div class="row end" style="margin-top:10px">
+      <button id="login-close" class="btn ghost small">Закрыть</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== Файлы рабочей папки ===================== -->
+<div id="files-modal" class="modal-overlay hidden">
+  <div class="modal">
+    <h2>📂 Файлы рабочей папки</h2>
+    <div id="files-crumb" class="mini muted" style="margin-bottom:8px"></div>
+    <div id="files-list" class="hist-list" style="max-height:40vh"></div>
+    <div class="row" style="margin-top:10px">
+      <button id="files-upload" class="btn ghost small">⬆ Загрузить файл сюда</button>
+      <input id="files-input" type="file" class="hidden">
+      <span class="mini muted">Клик по файлу — попросить агента открыть и объяснить его</span>
+    </div>
+    <div class="row end" style="margin-top:10px">
+      <button id="files-close" class="btn ghost small">Закрыть</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== Справка ===================== -->
+<div id="help-modal" class="modal-overlay hidden">
+  <div class="modal">
+    <h2>❓ Короткая справка</h2>
+
+    <div data-ru>
+    <h4>Как начать</h4>
+    <ol>
+      <li>Нажмите <b>☰</b> → «Рабочая папка» — укажите папку проекта (или создайте новую кнопкой рядом).</li>
+      <li>Там же → «Провайдер и ключ API»: выберите набор (OpenAI / Ollama / Gemini), вставьте ключ. Нажмите <b>«Проверить соединение»</b> — должно появиться зелёное «работает».</li>
+      <li><b>Сохранить настройки</b> → пишите задачу в поле снизу. Всё.</li>
+    </ol>
+
+    <h4>Кнопки сверху</h4>
+    <ul>
+      <li><b>📁 папка</b> — с ней работает агент; клик открывает настройки.</li>
+      <li><b>▶ Продолжить</b> — подхватить самый свежий чат этой папки.</li>
+      <li><b>🕘 История</b> — все прошлые чаты (любых папок), можно продолжить любой или его копию.</li>
+      <li><b>＋ Новый чат</b> — начать с чистого листа (старые чаты остаются в Истории).</li>
+      <li><b>❓</b> — эта справка.</li>
+      <li><b>EN / RU</b> — язык интерфейса.</li>
+    </ul>
+
+    <h4>Что значат плашки в чате</h4>
+    <ul>
+      <li><b style="color:var(--warn)">🔧 оранжевые</b> — агент что-то делает: команда, чтение/правка файла. Клик раскрывает подробности; <b style="color:var(--ok)">✓</b> — шаг завершён.</li>
+      <li><b>■ Стоп</b> — прервать работу немедленно.</li>
+      <li><b>Журнал</b> внизу — технический вывод CLI (нужен при ошибках).</li>
+    </ul>
+
+    <h4>Полезные настройки (☰)</h4>
+    <ul>
+      <li><b>Модель</b> — например gpt-4o, sonnet или qwen2.5-coder:7b для Ollama; «усердие» — глубина продумывания.</li>
+      <li><b>Инструкции агенту</b> — постоянные правила («отвечай по-русски», «сначала план»).</li>
+      <li><b>Права</b> — начните с «Только план»: агент ничего не меняет, только описывает план. Затем «Принимать правки» — подходит большинству; «Без ограничений» — только в доверенных папках. Перед правками делайте копию проекта или коммит в Git.</li>
+      <li><b>Лимиты</b> — максимум шагов и расходы в USD на один запрос.</li>
+    </ul>
+
+    <h4>Частые вопросы</h4>
+    <ul>
+      <li><b>«Агент не вошёл в систему» / «Not logged in»?</b> Нажмите «🔐 Войти через аккаунт Claude» в сообщении об ошибке или в жёлтой плашке сверху — откроется страница входа в браузере. Либо задайте ключ API провайдера в настройках (☰).</li>
+      <li><b>Слэш-команды терминала (/provider и т.п.)?</b> Они работают в терминале; их функции уже вынесены в кнопки настроек. Кнопка «Терминал» в настройках открывает консоль в рабочей папке.</li>
+      <li><b>Нужен ли отдельный сервер?</b> Нет: ключ API из настроек передаётся прямо в CLI на вашем компьютере, ничего разворачивать не нужно.</li>
+      <li><b>Где хранятся данные?</b> Настройки — в config.json рядом с программой; чаты — в домашней папке (~/.openclaude), как у терминального openclaude. Ключи никуда не отправляются, кроме провайдера.</li>
+      <li><b>«openclaude не найден»</b> — установите его кнопкой в приветствии или <code>npm install -g @twigpine/openclaude@latest</code>.</li>
+      <li><b>Фоновые задачи, вход в аккаунт, doctor</b> — эти редкие команды пока только в терминале (кнопка «Терминал»).</li>
+    </ul>
+
+    <h4>Ссылки</h4>
+    <ul>
+      <li>Проект openclaude: <a href="https://github.com/Twigpine/openclaude" target="_blank" rel="noopener">github.com/Twigpine/openclaude</a></li>
+      <li>Подробная инструкция этого интерфейса: файл <b>README.md</b> в папке программы</li>
+    </ul>
+    </div>
+
+    <div data-en>
+    <h4>Getting started</h4>
+    <ol>
+      <li>Click <b>☰</b> → “Workspace folder” and enter your project folder (or create a new one with the button next to it).</li>
+      <li>In the same panel → “Provider and API key”: pick a preset (OpenAI / Ollama / Gemini) and paste the key. Click <b>“Test connection”</b> — you should see a green “works”.</li>
+      <li><b>Save settings</b>, then type a task in the box at the bottom. That’s it.</li>
+    </ol>
+
+    <h4>Top bar buttons</h4>
+    <ul>
+      <li><b>📁 folder</b> — the folder the agent works in; click to open settings.</li>
+      <li><b>▶ Continue</b> — pick up the latest chat in this folder.</li>
+      <li><b>🕘 History</b> — all past chats (any folder); continue any of them or a copy.</li>
+      <li><b>＋ New chat</b> — start from scratch (old chats stay in History).</li>
+      <li><b>❓</b> — this help.</li>
+      <li><b>EN / RU</b> — interface language.</li>
+    </ul>
+
+    <h4>What the chat badges mean</h4>
+    <ul>
+      <li><b style="color:var(--warn)">🔧 orange</b> — the agent is doing something: a command, reading or editing a file. Click to expand; <b style="color:var(--ok)">✓</b> — step finished.</li>
+      <li><b>■ Stop</b> — interrupt immediately.</li>
+      <li><b>Log</b> at the bottom — technical CLI output (useful for errors).</li>
+    </ul>
+
+    <h4>Useful settings (☰)</h4>
+    <ul>
+      <li><b>Model</b> — e.g. gpt-4o, sonnet, or qwen2.5-coder:7b for Ollama; “effort” is how deeply the agent thinks.</li>
+      <li><b>Agent instructions</b> — standing rules (“reply in English”, “show a plan first”).</li>
+      <li><b>Permissions</b> — start with “Plan only”: the agent changes nothing and only describes a plan. Then “Accept edits” suits most people; “No restrictions” only in trusted folders. Make a copy of the project or a Git commit before edits.</li>
+      <li><b>Limits</b> — maximum steps and USD spend per request.</li>
+    </ul>
+
+    <h4>FAQ</h4>
+    <ul>
+      <li><b>“Agent is not logged in” / “Not logged in”?</b> Click “🔐 Sign in with Claude account” in the error message or the yellow banner — a sign-in page opens in the browser. Or set a provider API key in settings (☰).</li>
+      <li><b>Terminal slash commands (/provider etc.)?</b> They work in the terminal; their functions are already available as settings. The “Terminal” button opens a console in the workspace folder.</li>
+      <li><b>Do I need a separate server?</b> No: the API key from settings is passed straight to the CLI on your computer.</li>
+      <li><b>Where is data stored?</b> Settings — in config.json next to the program; chats — in your home folder (~/.openclaude), like the terminal openclaude. Keys are sent only to the provider.</li>
+      <li><b>“openclaude not found”</b> — install it with the button in the welcome window or <code>npm install -g @twigpine/openclaude@latest</code>.</li>
+      <li><b>Background tasks, doctor, plugins</b> — these rare commands are terminal-only for now (“Terminal” button).</li>
+    </ul>
+
+    <h4>Links</h4>
+    <ul>
+      <li>openclaude project: <a href="https://github.com/Twigpine/openclaude" target="_blank" rel="noopener">github.com/Twigpine/openclaude</a></li>
+      <li>Full guide for this interface: <b>README.md</b> in the program folder</li>
+    </ul>
+    </div>
+
+    <div class="row end" style="margin-top:12px">
+      <button id="help-close" class="btn primary small">Понятно</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast" class="hidden"></div>
+<script src="/i18n.js"></script>
+<script src="/app.js"></script>
+</body>
+</html>

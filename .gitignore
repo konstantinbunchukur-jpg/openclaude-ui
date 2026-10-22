@@ -1,0 +1,30 @@
+# Local settings contain API keys and absolute paths.
+/config.json
+.env
+.env.*
+!.env.example
+
+# Secrets and local editor/OS state.
+.openclaude*
+.npmrc
+*.pem
+*.key
+*.p12
+*.pfx
+*.bak
+*.tmp
+.vscode/
+.idea/
+node_modules/
+*.log
+coverage/
+.DS_Store
+Thumbs.db
+
+# Local manual-test data and unreviewed screenshots: never publish.
+/test/demo-workspace/
+/test/fake-config/
+/test/run*.json
+/test/s*.txt
+/docs/screenshots/
+/graphify-out/

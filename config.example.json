@@ -1,0 +1,11 @@
+{
+  "port": 8321,
+  "openclaudeCmd": "openclaude",
+  "workspace": "",
+  "provider": "",
+  "env": {},
+  "permissionMode": "default",
+  "maxTurns": 10,
+  "maxBudgetUsd": 1,
+  "openBrowser": true
+}
