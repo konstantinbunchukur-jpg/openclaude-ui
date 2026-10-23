@@ -4,8 +4,8 @@
 секреты и личные файлы проверены и исключены. Ветка — `main`, первый коммит создан
 локально.
 
-Статус кода — **прототип**, не стабильный релиз: известные дефекты и план
-исправлений — в [REVIEW.md](REVIEW.md), ограничения — в [SECURITY.md](../SECURITY.md),
+Статус кода — **прототип**, не стабильный релиз: известные ограничения и план
+исправлений — в [REVIEW.md](REVIEW.md), меры безопасности — в [SECURITY.md](../SECURITY.md),
 отчёт о данных — в [SECRETS-AUDIT.md](SECRETS-AUDIT.md).
 
 ## Что не попадает в Git
@@ -47,8 +47,8 @@ git diff --cached --stat
 git grep --cached -nE "sk-[A-Za-z0-9_-]{16,}|gh[pousr]_[A-Za-z0-9]{20,}|BEGIN [A-Z ]*PRIVATE KEY"
 ```
 
-`npm run test:security` сейчас падает на известных дефектах. Не прячьте этот
-результат: для стабильного релиза сначала исправьте P0 и добейтесь прохождения.
+`npm run test:security` проходит (7 из 7). Держите эту проверку в release gate:
+её ослабление (`skip`, `todo`, `continue-on-error`) запрещено.
 
 ## Публикация
 
@@ -59,13 +59,13 @@ git push -u origin main
 
 Репозиторий создайте пустым — без README, `.gitignore` и LICENSE, иначе первый push
 будет отклонён. Безопасный первый шаг — **private** для ревью; в **public**
-переключайтесь после исправления P0 и перевыпуска скриншотов на синтетических данных.
+переключайтесь после перевыпуска скриншотов на синтетических данных.
 
 После публикации:
 
 1. Включите **Secret scanning** и **Push protection** (Settings → Code security).
 2. Включите **Private vulnerability reporting** (Settings → Code security).
-3. Когда `npm run test:security` станет зелёным, назначьте job `security` обязательным
+3. `npm run test:security` зелёный — назначьте job `security` обязательным
    для `main` в Rulesets/branch protection.
 
 GitHub Pages приложение не запустит: ему нужен локальный Node.js и доступ к CLI и
@@ -87,7 +87,7 @@ CONTRIBUTING, CODE_OF_CONDUCT, шаблоны issue и PR.
 ## CI и тесты
 
 GitHub Actions запускает проверки на Windows с Node.js 22 и 24: job `smoke`
-(`npm run check` и `npm test`) и job `security` (`npm run test:security`), который
-сейчас ожидаемо красный. Зависимостей нет: `npm install` и lockfile не требуются.
+(`npm run check` и `npm test`) и job `security` (`npm run test:security`); оба
+зелёные. Зависимостей нет: `npm install` и lockfile не требуются.
 `private: true` в `package.json` предотвращает случайную публикацию в npm и не
 влияет на видимость репозитория на GitHub.

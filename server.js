@@ -74,9 +74,6 @@ function readBody(req) {
     req.on('error', reject);
   });
 }
-function quoteIfNeeded(s) {
-  return /[\s"&|<>^()]/.test(s) ? '"' + String(s).replace(/"/g, '') + '"' : String(s);
-}
 function wsKey(ws) { return String(ws || '').toLowerCase(); }
 function cleanStr(v, max) {
   return String(v == null ? '' : v).replace(/[\u0000-\u001f]+/g, ' ').trim().slice(0, max || 4000);
@@ -85,9 +82,32 @@ function cleanPathList(v, maxItems) {
   if (!Array.isArray(v)) return [];
   return v.map(x => String(x).trim().replace(/"/g, '')).filter(Boolean).slice(0, maxItems);
 }
-function insideWs(p) {
-  const ws = path.resolve(config.workspace || '');
-  return !!ws && (p === ws || p.startsWith(ws + path.sep));
+
+/* Canonical path checks: a string prefix does not follow junctions and symlinks. */
+function realPath(p) {
+  try { return fs.realpathSync.native ? fs.realpathSync.native(p) : fs.realpathSync(p); }
+  catch { return null; }
+}
+function wsRoot() {
+  const raw = String(config.workspace || '').trim();
+  return raw ? realPath(path.resolve(raw)) : null;
+}
+function pathIsInside(root, p) {
+  const norm = s => (process.platform === 'win32' ? s.toLowerCase() : s);
+  const rel = path.relative(norm(root), norm(p));
+  return rel === '' || (!path.isAbsolute(rel) && rel !== '..' && !rel.startsWith('..' + path.sep));
+}
+
+/*
+ * Start the CLI with a separate executable and argv, never a shell command string:
+ * a path with spaces must stay one argument. On Windows only native .exe/.com files
+ * are started directly; a bare name or a .cmd/.bat shim installed by npm needs
+ * cmd.exe, which is started with an argument array rather than a command string.
+ */
+function spawnCli(command, args, opts) {
+  const bin = String(command || '');
+  if (process.platform !== 'win32' || /\.(exe|com)$/i.test(bin)) return spawn(bin, args, opts);
+  return spawn(process.env.ComSpec || 'cmd.exe', ['/d', '/s', '/c', bin, ...args], opts);
 }
 
 /* --------------------------- запуск процессов --------------------------- */
@@ -130,7 +150,7 @@ function finalizeRun(run, code) {
 /*
  * Запуск openclaude в headless-режиме.
  * opts: { resumeSessionId, cont (--continue), fork (--fork-session), maxTurnsOverride }
- * Сообщение передаётся через stdin (файл-перенаправление), ответ — построчно stream-json.
+ * Сообщение передаётся через stdin (pipe), ответ — построчно stream-json.
  */
 function startClaudeRun(message, workspace, opts) {
   opts = opts || {};
@@ -159,8 +179,6 @@ function startClaudeRun(message, workspace, opts) {
   const budget = parseFloat(config.maxBudgetUsd);
   if (budget > 0) args.push('--max-budget-usd', String(budget));
 
-  run.tmpFile = path.join(os.tmpdir(), `openclaude-ui-msg-${run.id}.txt`);
-  fs.writeFileSync(run.tmpFile, message, 'utf8');
   const sp = String(config.systemPrompt || '').trim();
   if (sp) {
     run.tmpFile2 = path.join(os.tmpdir(), `openclaude-ui-sp-${run.id}.txt`);
@@ -168,15 +186,14 @@ function startClaudeRun(message, workspace, opts) {
     args.push('--append-system-prompt-file', run.tmpFile2);
   }
 
-  const cmdline = [quoteIfNeeded(config.openclaudeCmd || 'openclaude'), ...args].join(' ')
-    + ' < ' + quoteIfNeeded(run.tmpFile);
-
   run.status = 'running';
   try {
-    run.proc = spawn(cmdline, {
-      cwd: workspace, shell: true, windowsHide: true,
+    run.proc = spawnCli(config.openclaudeCmd || 'openclaude', args, {
+      cwd: workspace, windowsHide: true,
       env: Object.assign({}, process.env, config.env || {})
     });
+    run.proc.stdin.on('error', () => {});
+    run.proc.stdin.end(message, 'utf8');
   } catch (e) {
     pushEvent(run, 'log', { stream: 'stderr', text: 'Не удалось запустить: ' + e.message });
     finalizeRun(run, -1);
@@ -231,7 +248,7 @@ function startClaudeRun(message, workspace, opts) {
 function startInstallRun() {
   const run = makeRun('install');
   run.status = 'running';
-  run.proc = spawn('npm install -g @twigpine/openclaude@latest', { cwd: ROOT, shell: true, windowsHide: true });
+  run.proc = spawnCli('npm', ['install', '-g', '@twigpine/openclaude@latest'], { cwd: ROOT, windowsHide: true });
   let buf = '';
   const forward = (stream) => d => {
     buf += d.toString('utf8');
@@ -252,8 +269,8 @@ function startInstallRun() {
 
 let cliCheck = { found: false, version: null, error: null, checkedAt: 0 };
 function checkOpenclaude(cb) {
-  const bin = quoteIfNeeded(config.openclaudeCmd || 'openclaude');
-  const p = spawn(bin + ' --version', { shell: true, windowsHide: true });
+  const p = spawnCli(config.openclaudeCmd || 'openclaude', ['--version'],
+    { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
   let out = '', err = '', done = false;
   const timer = setTimeout(() => { if (!done) { done = true; try { p.kill(); } catch {} cb({ found: false, version: null, error: 'таймаут проверки' }); } }, 20000);
   p.stdout.on('data', d => out += d);
@@ -380,9 +397,9 @@ async function handleApi(req, res, url) {
 
   /* Статус входа в аккаунт Anthropic (openclaude auth status) */
   if (req.method === 'GET' && route === '/api/auth') {
-    const bin = quoteIfNeeded(config.openclaudeCmd || 'openclaude');
     const out = await new Promise(resolve => {
-      const p = spawn(bin + ' auth status', { shell: true, windowsHide: true });
+      const p = spawnCli(config.openclaudeCmd || 'openclaude', ['auth', 'status'],
+        { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
       let o = '', done = false;
       const t = setTimeout(() => { if (!done) { done = true; try { p.kill(); } catch {} resolve(''); } }, 15000);
       p.stdout.on('data', d => o += d);
@@ -400,7 +417,7 @@ async function handleApi(req, res, url) {
   if (req.method === 'POST' && route === '/api/login') {
     const run = makeRun('login');
     run.status = 'running';
-    run.proc = spawn(quoteIfNeeded(config.openclaudeCmd || 'openclaude') + ' auth login', { cwd: ROOT, shell: true, windowsHide: true });
+    run.proc = spawnCli(config.openclaudeCmd || 'openclaude', ['auth', 'login'], { cwd: ROOT, windowsHide: true });
     const forward = (stream) => d => {
       for (const line of d.toString('utf8').split(/\r?\n/)) {
         if (line.trim()) pushEvent(run, 'log', { stream, text: line });
@@ -572,13 +589,14 @@ async function handleApi(req, res, url) {
 
   /* Список файлов рабочей папки (с подпапками, без выхода за её пределы) */
   if (req.method === 'GET' && route === '/api/files') {
-    const ws = path.resolve(config.workspace || '');
+    const ws = wsRoot();
     if (!ws) return json(res, 400, { error: 'Сначала укажите рабочую папку в настройках' });
     let dir = ws;
     const rel = url.searchParams.get('path') || '';
     if (rel) {
-      dir = path.resolve(ws, rel);
-      if (!insideWs(dir)) return json(res, 400, { error: 'Путь вне рабочей папки' });
+      const cand = realPath(path.resolve(ws, rel));
+      if (!cand || !pathIsInside(ws, cand)) return json(res, 400, { error: 'Путь вне рабочей папки' });
+      dir = cand;
     }
     let entries = [];
     try { entries = fs.readdirSync(dir, { withFileTypes: true }); }
@@ -597,15 +615,16 @@ async function handleApi(req, res, url) {
 
   /* Загрузка файла в рабочую папку (тело запроса — содержимое файла) */
   if (req.method === 'POST' && route === '/api/upload') {
-    const ws = path.resolve(config.workspace || '');
+    const ws = wsRoot();
     if (!ws) return json(res, 400, { error: 'Сначала укажите рабочую папку' });
     const name = path.basename(String(url.searchParams.get('name') || '')).replace(/[<>:"/\\|?*]/g, '_');
-    if (!name) return json(res, 400, { error: 'Не указано имя файла' });
+    if (!name || name === '.' || name === '..') return json(res, 400, { error: 'Не указано имя файла' });
     let dir = ws;
     const rel = url.searchParams.get('dir') || '';
     if (rel) {
-      dir = path.resolve(ws, rel);
-      if (!insideWs(dir)) return json(res, 400, { error: 'Путь вне рабочей папки' });
+      const cand = realPath(path.resolve(ws, rel));
+      if (!cand || !pathIsInside(ws, cand)) return json(res, 400, { error: 'Путь вне рабочей папки' });
+      dir = cand;
     }
     const target = path.join(dir, name);
     const chunks = []; let size = 0, aborted = false;
@@ -615,8 +634,11 @@ async function handleApi(req, res, url) {
       req.on('error', resolve);
     });
     if (aborted) return json(res, 400, { error: 'Файл больше 20 МБ' });
-    try { fs.writeFileSync(target, Buffer.concat(chunks)); }
-    catch (e) { return json(res, 500, { error: 'Не удалось записать: ' + e.message }); }
+    try { fs.writeFileSync(target, Buffer.concat(chunks), { flag: 'wx' }); }
+    catch (e) {
+      if (e.code === 'EEXIST') return json(res, 409, { error: 'Файл уже существует' });
+      return json(res, 500, { error: 'Не удалось записать: ' + e.message });
+    }
     return json(res, 200, { ok: true, path: path.relative(ws, target) });
   }
 
